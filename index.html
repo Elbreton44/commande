@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Order Pro - Scanner & Commandes</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- HTML5-QRCode Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- QRCode.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        #reader video {
+            object-fit: cover !important;
+            border-radius: 0.75rem;
+        }
+        /* Style personnalisé pour masquer le menu interne de html5-qrcode inutilisé */
+        #reader__dashboard_section_csr button {
+            background-color: #4f46e5;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans text-slate-800 antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header / Navigation supérieure -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-brand-600 text-white p-2 rounded-xl shadow-md">
+                    <i data-lucide="qr-code" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight text-slate-900">QR Order <span class="text-brand-600">Pro</span></h1>
+                    <p class="text-xs text-slate-500 hidden sm:block">Scanner & Création de commandes rapide</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span id="badge-cart-count" class="bg-brand-50 text-brand-700 text-xs font-semibold px-3 py-1 rounded-full border border-brand-200">
+                    0 article(s) dans le panier
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation par Onglets -->
+    <div class="bg-white border-b border-slate-200 sticky top-[57px] z-20">
+        <div class="max-w-5xl mx-auto flex">
+            <button id="tab-btn-scanner" onclick="switchTab('scanner')" class="flex-1 py-3 px-4 text-center font-medium text-sm border-b-2 border-brand-600 text-brand-600 flex items-center justify-center space-x-2 transition-all">
+                <i data-lucide="scan" class="w-4 h-4"></i>
+                <span>Scanner & Panier</span>
+            </button>
+            <button id="tab-btn-history" onclick="switchTab('history')" class="flex-1 py-3 px-4 text-center font-medium text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center justify-center space-x-2 transition-all">
+                <i data-lucide="receipt" class="w-4 h-4"></i>
+                <span>Historique</span>
+                <span id="badge-orders-count" class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold ml-1">0</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Zone de Notification / Toast -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- Contenu principal -->
+    <main class="flex-1 max-w-5xl w-full mx-auto p-4 md:p-6 pb-24">
+
+        <!-- ================= ONGLET 1 : SCANNER & PANIER ================= -->
+        <section id="tab-scanner" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Colonne de Gauche : Scanner & Ajout Manuel -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Carte du Scanner QR -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-bold text-slate-900 flex items-center text-base">
+                            <i data-lucide="camera" class="w-5 h-5 mr-2 text-brand-600"></i>
+                            Scanner un QR Code
+                        </h2>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Actif
+                        </span>
+                    </div>
+
+                    <!-- Zone de prévisualisation Caméra -->
+                    <div id="scanner-wrapper" class="relative bg-slate-900 rounded-xl overflow-hidden min-h-[260px] flex items-center justify-center border border-slate-200">
+                        <div id="reader" class="w-full"></div>
+                        <div id="scanner-placeholder" class="text-center p-6 text-slate-400 flex flex-col items-center">
+                            <i data-lucide="camera-off" class="w-12 h-12 mb-2 stroke-1"></i>
+                            <p class="text-sm">Caméra inactive</p>
+                            <button onclick="startScanner()" class="mt-3 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition shadow-sm">
+                                Démarrer la caméra
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Actions complémentaires du Scanner -->
+                    <div class="flex flex-col gap-2 pt-1">
+                        <label class="cursor-pointer flex items-center justify-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-medium transition">
+                            <i data-lucide="image" class="w-4 h-4 mr-2"></i>
+                            <span>Importer une image / fichier QR</span>
+                            <input type="file" id="qr-input-file" accept="image/*" class="hidden" onchange="scanImageFile(this)">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Carte : Ajout Manuel d'un Produit -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+                    <h2 class="font-bold text-slate-900 text-base flex items-center">
+                        <i data-lucide="plus-circle" class="w-5 h-5 mr-2 text-brand-600"></i>
+                        Ajout manuel d'article
+                    </h2>
+                    <form id="form-manual-add" onsubmit="handleManualAdd(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Nom du produit</label>
+                            <input type="text" id="manual-name" required placeholder="Ex: Café Espresso, Pizza Royale..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Prix (€ TTC)</label>
+                                <input type="number" step="0.01" min="0" id="manual-price" required placeholder="0.00" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Quantité</label>
+                                <input type="number" min="1" value="1" id="manual-qty" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white">
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-medium text-sm flex items-center justify-center space-x-2 transition shadow-sm">
+                            <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+                            <span>Ajouter au panier</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Exemples de QR Codes pré-générés pour tests -->
+                <div class="bg-indigo-50/60 rounded-2xl p-4 border border-indigo-100 text-xs text-indigo-900 space-y-2">
+                    <p class="font-semibold flex items-center">
+                        <i data-lucide="sparkles" class="w-4 h-4 mr-1 text-indigo-600"></i>
+                        Astuce test rapide :
+                    </p>
+                    <p class="text-indigo-700">Vous pouvez scanner ou copier ce type de JSON dans un QR code :</p>
+                    <code class="block bg-white/80 p-2 rounded border border-indigo-200 font-mono text-[11px] text-slate-700">
+                        {"name": "Menu Burger", "price": 14.50}
+                    </code>
+                </div>
+
+            </div>
+
+            <!-- Colonne de Droite : Panier & Formulaire de Commande -->
+            <div class="lg:col-span-7 space-y-6">
+                
+                <!-- Carte du Panier -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col min-h-[400px]">
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+                        <h2 class="font-bold text-slate-900 text-base flex items-center">
+                            <i data-lucide="shopping-cart" class="w-5 h-5 mr-2 text-brand-600"></i>
+                            Articles de la commande
+                        </h2>
+                        <button onclick="clearCart()" id="btn-clear-cart" class="text-xs text-rose-600 hover:text-rose-700 font-medium hidden flex items-center transition">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5 mr-1"></i> Vider
+                        </button>
+                    </div>
+
+                    <!-- Liste des articles -->
+                    <div id="cart-items-container" class="flex-1 py-4 divide-y divide-slate-100 overflow-y-auto max-h-[360px]">
+                        <!-- Rempli dynamiquement via JS -->
+                    </div>
+
+                    <!-- Calculs financières du panier -->
+                    <div class="pt-4 border-t border-slate-100 space-y-2 text-sm bg-slate-50/50 -mx-5 -mb-5 p-5 rounded-b-2xl">
+                        <div class="flex justify-between text-slate-500">
+                            <span>Sous-total HT</span>
+                            <span id="cart-subtotal" class="font-medium">0.00 €</span>
+                        </div>
+                        <div class="flex justify-between text-slate-500">
+                            <span>TVA (20%)</span>
+                            <span id="cart-tax" class="font-medium">0.00 €</span>
+                        </div>
+                        <div class="flex justify-between text-base font-bold text-slate-900 pt-2 border-t border-slate-200">
+                            <span>Total TTC</span>
+                            <span id="cart-total" class="text-brand-600">0.00 €</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulaire de Validation de Commande -->
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4">
+                    <h2 class="font-bold text-slate-900 text-base flex items-center">
+                        <i data-lucide="user-check" class="w-5 h-5 mr-2 text-brand-600"></i>
+                        Informations du client / Table
+                    </h2>
+
+                    <form id="form-checkout" onsubmit="handleCheckout(event)" class="space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Nom du client *</label>
+                                <input type="text" id="client-name" required placeholder="Ex: Jean Dupont" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">N° de Table / Emplacement</label>
+                                <input type="text" id="client-table" placeholder="Ex: Table 12, Express, Emporter..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Notes / Instructions particulières</label>
+                            <textarea id="client-notes" rows="2" placeholder="Sans oignon, sauce à part..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white resize-none"></textarea>
+                        </div>
+
+                        <button type="submit" id="btn-submit-order" disabled class="w-full py-3 bg-brand-600 hover:bg-brand-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl font-bold text-base flex items-center justify-center space-x-2 transition shadow-md">
+                            <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                            <span>Valider et créer la commande</span>
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ================= ONGLET 2 : HISTORIQUE DES COMMANDES ================= -->
+        <section id="tab-history" class="hidden space-y-6">
+            
+            <!-- Barre de Recherche et Filtres -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="relative w-full sm:w-72">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="filter-search" oninput="renderOrdersHistory()" placeholder="Rechercher (Client, ID, Table)..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                    <span class="text-xs text-slate-500 font-medium">Statut:</span>
+                    <select id="filter-status" onchange="renderOrdersHistory()" class="bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                        <option value="ALL">Tous les statuts</option>
+                        <option value="En attente">En attente</option>
+                        <option value="Confirmée">Confirmée</option>
+                        <option value="Livrée">Livrée</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Liste des commandes -->
+            <div id="orders-history-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Rempli dynamiquement via JS -->
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Modal Détails / QR Code d'une Commande -->
+    <div id="order-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+            <button onclick="closeOrderModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <div class="text-center space-y-2">
+                <span id="modal-order-status" class="inline-block px-3 py-1 rounded-full text-xs font-semibold"></span>
+                <h3 id="modal-order-id" class="text-xl font-bold text-slate-900"></h3>
+                <p id="modal-order-date" class="text-xs text-slate-500"></p>
+            </div>
+
+            <!-- Conteneur QR Code -->
+            <div class="my-6 flex flex-col items-center justify-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div id="qrcode-canvas" class="p-2 bg-white rounded-lg shadow-sm"></div>
+                <p class="text-xs text-slate-400 mt-2 text-center">Scanner ce QR pour relire cette commande</p>
+            </div>
+
+            <!-- Détails de la commande -->
+            <div class="space-y-4 text-sm">
+                <div class="border-t border-b border-slate-100 py-3 space-y-1">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Client & Emplacement</p>
+                    <p class="font-medium text-slate-800" id="modal-client-info"></p>
+                    <p class="text-xs text-slate-500 italic" id="modal-notes-info"></p>
+                </div>
+
+                <div>
+                    <p class="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-2">Articles</p>
+                    <ul id="modal-items-list" class="space-y-1.5 text-slate-700"></ul>
+                </div>
+
+                <div class="border-t border-slate-100 pt-3 flex justify-between items-center text-base font-bold text-slate-900">
+                    <span>Total TTC</span>
+                    <span id="modal-order-total" class="text-brand-600"></span>
+                </div>
+            </div>
+
+            <div class="mt-6 flex space-x-2">
+                <button onclick="closeOrderModal()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium text-sm transition">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // --- ÉTAT GLOBAL DE L'APPLICATION ---
+        let cart = [];
+        let orders = [];
+        let html5QrCode = null;
+        let isScannerRunning = false;
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            lucide.createIcons();
+            loadOrdersFromStorage();
+            renderCart();
+            renderOrdersHistory();
+        };
+
+        // --- GESTION DES ONGLETS ---
+        function switchTab(tab) {
+            const btnScanner = document.getElementById('tab-btn-scanner');
+            const btnHistory = document.getElementById('tab-btn-history');
+            const secScanner = document.getElementById('tab-scanner');
+            const secHistory = document.getElementById('tab-history');
+
+            if (tab === 'scanner') {
+                secScanner.classList.remove('hidden');
+                secHistory.classList.add('hidden');
+
+                btnScanner.className = "flex-1 py-3 px-4 text-center font-medium text-sm border-b-2 border-brand-600 text-brand-600 flex items-center justify-center space-x-2 transition-all";
+                btnHistory.className = "flex-1 py-3 px-4 text-center font-medium text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center justify-center space-x-2 transition-all";
+            } else {
+                secScanner.classList.add('hidden');
+                secHistory.classList.remove('hidden');
+
+                btnHistory.className = "flex-1 py-3 px-4 text-center font-medium text-sm border-b-2 border-brand-600 text-brand-600 flex items-center justify-center space-x-2 transition-all";
+                btnScanner.className = "flex-1 py-3 px-4 text-center font-medium text-sm border-b-2 border-transparent text-slate-500 hover:text-slate-700 flex items-center justify-center space-x-2 transition-all";
+                
+                // Arrete la caméra pour économiser les ressources
+                stopScanner();
+            }
+        }
+
+        // --- SCANNER DE QR CODE ---
+        function startScanner() {
+            const placeholder = document.getElementById('scanner-placeholder');
+            placeholder.style.display = 'none';
+
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+
+            const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanFailure
+            ).then(() => {
+                isScannerRunning = true;
+            }).catch(err => {
+                showToast("Impossible d'accéder à la caméra", "error");
+                placeholder.style.display = 'flex';
+            });
+        }
+
+        function stopScanner() {
+            if (html5QrCode && isScannerRunning) {
+                html5QrCode.stop().then(() => {
+                    isScannerRunning = false;
+                    document.getElementById('scanner-placeholder').style.display = 'flex';
+                }).catch(err => console.error(err));
+            }
+        }
+
+        function onScanSuccess(decodedText) {
+            processScannedContent(decodedText);
+            
+            // Petite pause visuelle
+            if (navigator.vibrate) navigator.vibrate(100);
+        }
+
+        function onScanFailure(error) {
+            // Scans continus en attente
+        }
+
+        // Scan via import de fichier d'image
+        function scanImageFile(input) {
+            if (input.files && input.files[0]) {
+                const imageFile = input.files[0];
+                const qrScanner = new Html5Qrcode("reader");
+                qrScanner.scanFile(imageFile, true)
+                    .then(decodedText => {
+                        processScannedContent(decodedText);
+                        input.value = ""; // Reset file input
+                    })
+                    .catch(err => {
+                        showToast("Aucun QR Code valide détecté sur l'image", "error");
+                        input.value = "";
+                    });
+            }
+        }
+
+        // Traitement de l'information scannée
+        function processScannedContent(text) {
+            let item = null;
+
+            // Tentative de parsing JSON
+            try {
+                const parsed = JSON.parse(text);
+                if (parsed.name && parsed.price) {
+                    item = {
+                        id: parsed.id || 'QR-' + Date.now().toString().slice(-4),
+                        name: String(parsed.name),
+                        price: parseFloat(parsed.price) || 0
+                    };
+                }
+            } catch (e) {
+                // Si ce n'est pas du JSON, interpréter comme du texte simple
+                // Format possible : "Nom Produit : 12.50" ou juste "Nom Produit"
+                if (text.includes(':')) {
+                    const parts = text.split(':');
+                    const name = parts[0].trim();
+                    const price = parseFloat(parts[1].trim()) || 5.00;
+                    item = { id: 'QR-' + Date.now().toString().slice(-4), name: name, price: price };
+                } else {
+                    item = { id: 'QR-' + Date.now().toString().slice(-4), name: text.trim(), price: 5.00 };
+                }
+            }
+
+            if (item && item.name) {
+                addItemToCart(item.name, item.price, 1);
+                showToast(`Ajouté : ${item.name} (${item.price.toFixed(2)} €)`, "success");
+            } else {
+                showToast("Format du QR code non reconnu", "error");
+            }
+        }
+
+        // --- GESTION DU PANIER ---
+        function handleManualAdd(event) {
+            event.preventDefault();
+            const nameInput = document.getElementById('manual-name');
+            const priceInput = document.getElementById('manual-price');
+            const qtyInput = document.getElementById('manual-qty');
+
+            const name = nameInput.value.trim();
+            const price = parseFloat(priceInput.value) || 0;
+            const qty = parseInt(qtyInput.value) || 1;
+
+            if (name && price >= 0 && qty > 0) {
+                addItemToCart(name, price, qty);
+                nameInput.value = '';
+                priceInput.value = '';
+                qtyInput.value = '1';
+                showToast(`Article "${name}" ajouté`, "success");
+            }
+        }
+
+        function addItemToCart(name, price, quantity = 1) {
+            const existingIndex = cart.findIndex(item => item.name.toLowerCase() === name.toLowerCase() && item.price === price);
+            
+            if (existingIndex > -1) {
+                cart[existingIndex].quantity += quantity;
+            } else {
+                cart.push({
+                    id: 'ITEM-' + Date.now() + '-' + Math.floor(Math.random() * 100),
+                    name: name,
+                    price: price,
+                    quantity: quantity
+                });
+            }
+            renderCart();
+        }
+
+        function updateQuantity(index, delta) {
+            if (cart[index]) {
+                cart[index].quantity += delta;
+                if (cart[index].quantity <= 0) {
+                    cart.splice(index, 1);
+                }
+                renderCart();
+            }
+        }
+
+        function removeItem(index) {
+            cart.splice(index, 1);
+            renderCart();
+        }
+
+        function clearCart() {
+            cart = [];
+            renderCart();
+            showToast("Panier vidé", "info");
+        }
+
+        function renderCart() {
+            const container = document.getElementById('cart-items-container');
+            const clearBtn = document.getElementById('btn-clear-cart');
+            const submitBtn = document.getElementById('btn-submit-order');
+            const cartBadge = document.getElementById('badge-cart-count');
+
+            const totalArticlesCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+            cartBadge.textContent = `${totalArticlesCount} article(s)`;
+
+            if (cart.length === 0) {
+                container.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center py-12 text-slate-400 text-center">
+                        <i data-lucide="shopping-bag" class="w-12 h-12 mb-3 stroke-1 text-slate-300"></i>
+                        <p class="text-sm font-medium">Votre panier est vide</p>
+                        <p class="text-xs text-slate-400 mt-1">Scannez un QR code ou ajoutez un produit manuellement</p>
+                    </div>
+                `;
+                clearBtn.classList.add('hidden');
+                submitBtn.disabled = true;
+                updateTotals(0);
+                lucide.createIcons();
+                return;
+            }
+
+            clearBtn.classList.remove('hidden');
+            submitBtn.disabled = false;
+
+            let html = '';
+            let totalTTC = 0;
+
+            cart.forEach((item, index) => {
+                const itemTotal = item.price * item.quantity;
+                totalTTC += itemTotal;
+
+                html += `
+                    <div class="py-3 flex items-center justify-between gap-3">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-semibold text-slate-800 truncate">${escapeHtml(item.name)}</p>
+                            <p class="text-xs text-slate-500">${item.price.toFixed(2)} € / unité</p>
+                        </div>
+
+                        <!-- Boutons Quantité -->
+                        <div class="flex items-center space-x-2 bg-slate-100 p-1 rounded-lg">
+                            <button onclick="updateQuantity(${index}, -1)" class="w-6 h-6 rounded bg-white text-slate-700 shadow-sm flex items-center justify-center font-bold text-xs hover:bg-slate-200">
+                                -
+                            </button>
+                            <span class="text-xs font-bold text-slate-800 w-4 text-center">${item.quantity}</span>
+                            <button onclick="updateQuantity(${index}, 1)" class="w-6 h-6 rounded bg-white text-slate-700 shadow-sm flex items-center justify-center font-bold text-xs hover:bg-slate-200">
+                                +
+                            </button>
+                        </div>
+
+                        <!-- Prix & Delete -->
+                        <div class="text-right flex items-center space-x-3">
+                            <span class="text-sm font-bold text-slate-900">${itemTotal.toFixed(2)} €</span>
+                            <button onclick="removeItem(${index})" class="text-slate-400 hover:text-rose-600 transition">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            updateTotals(totalTTC);
+            lucide.createIcons();
+        }
+
+        function updateTotals(totalTTC) {
+            const subtotalHT = totalTTC / 1.20; // Hypothèse TVA 20%
+            const tax = totalTTC - subtotalHT;
+
+            document.getElementById('cart-subtotal').textContent = `${subtotalHT.toFixed(2)} €`;
+            document.getElementById('cart-tax').textContent = `${tax.toFixed(2)} €`;
+            document.getElementById('cart-total').textContent = `${totalTTC.toFixed(2)} €`;
+        }
+
+        // --- CREATION DE COMMANDE ---
+        function handleCheckout(event) {
+            event.preventDefault();
+            if (cart.length === 0) return;
+
+            const clientName = document.getElementById('client-name').value.trim();
+            const clientTable = document.getElementById('client-table').value.trim();
+            const clientNotes = document.getElementById('client-notes').value.trim();
+
+            const totalTTC = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+
+            const newOrder = {
+                id: 'CMD-' + Math.floor(100000 + Math.random() * 900000),
+                createdAt: new Date().toISOString(),
+                clientName: clientName,
+                table: clientTable || 'N/A',
+                notes: clientNotes,
+                items: [...cart],
+                total: totalTTC,
+                status: 'En attente' // En attente, Confirmée, Livrée
+            };
+
+            orders.unshift(newOrder);
+            saveOrdersToStorage();
+
+            // Reset panier & formulaire
+            cart = [];
+            renderCart();
+            document.getElementById('form-checkout').reset();
+
+            showToast("Commande créée avec succès !", "success");
+
+            // Met à jour l'historique et bascule vers la vue
+            renderOrdersHistory();
+            openOrderModal(newOrder.id);
+        }
+
+        // --- HISTORIQUE & STOCKAGE ---
+        function saveOrdersToStorage() {
+            localStorage.setItem('qr_orders_data', JSON.stringify(orders));
+            updateOrdersBadge();
+        }
+
+        function loadOrdersFromStorage() {
+            const stored = localStorage.getItem('qr_orders_data');
+            if (stored) {
+                try {
+                    orders = JSON.parse(stored);
+                } catch (e) {
+                    orders = [];
+                }
+            }
+            updateOrdersBadge();
+        }
+
+        function updateOrdersBadge() {
+            document.getElementById('badge-orders-count').textContent = orders.length;
+        }
+
+        function renderOrdersHistory() {
+            const container = document.getElementById('orders-history-list');
+            const searchVal = document.getElementById('filter-search').value.toLowerCase();
+            const statusVal = document.getElementById('filter-status').value;
+
+            const filteredOrders = orders.filter(order => {
+                const matchesSearch = order.clientName.toLowerCase().includes(searchVal) ||
+                                      order.id.toLowerCase().includes(searchVal) ||
+                                      order.table.toLowerCase().includes(searchVal);
+                const matchesStatus = statusVal === 'ALL' || order.status === statusVal;
+
+                return matchesSearch && matchesStatus;
+            });
+
+            if (filteredOrders.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full bg-white rounded-2xl p-12 text-center text-slate-400 border border-slate-200">
+                        <i data-lucide="receipt-off" class="w-12 h-12 mx-auto mb-3 stroke-1 text-slate-300"></i>
+                        <p class="text-base font-medium text-slate-600">Aucune commande trouvée</p>
+                        <p class="text-xs text-slate-400 mt-1">Essayez de modifier vos filtres ou créez une nouvelle commande.</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            let html = '';
+            filteredOrders.forEach(order => {
+                const dateObj = new Date(order.createdAt);
+                const formattedDate = dateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                let statusBadgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                if (order.status === 'Confirmée') statusBadgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                if (order.status === 'Livrée') statusBadgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
+                html += `
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 space-y-4 hover:border-slate-300 transition">
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-bold text-slate-900 text-base">${escapeHtml(order.id)}</span>
+                                    <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusBadgeColor}">
+                                        ${order.status}
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-0.5">${formattedDate}</p>
+                            </div>
+                            <span class="text-lg font-bold text-brand-600">${order.total.toFixed(2)} €</span>
+                        </div>
+
+                        <div class="bg-slate-50 p-3 rounded-xl space-y-1 text-xs">
+                            <p class="font-semibold text-slate-700">Client: <span class="font-normal text-slate-600">${escapeHtml(order.clientName)}</span></p>
+                            <p class="font-semibold text-slate-700">Emplacement / Table: <span class="font-normal text-slate-600">${escapeHtml(order.table)}</span></p>
+                            <p class="text-slate-500 truncate pt-1 border-t border-slate-200/60 mt-1">
+                                ${order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
+                            </p>
+                        </div>
+
+                        <!-- Actions Commande -->
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                            <div class="flex items-center space-x-1">
+                                <label class="text-slate-500 mr-1">Statut:</label>
+                                <select onchange="updateOrderStatus('${order.id}', this.value)" class="bg-slate-100 border-none rounded-lg px-2 py-1 text-xs font-medium text-slate-700 focus:ring-2 focus:ring-brand-500">
+                                    <option value="En attente" ${order.status === 'En attente' ? 'selected' : ''}>En attente</option>
+                                    <option value="Confirmée" ${order.status === 'Confirmée' ? 'selected' : ''}>Confirmée</option>
+                                    <option value="Livrée" ${order.status === 'Livrée' ? 'selected' : ''}>Livrée</option>
+                                </select>
+                            </div>
+
+                            <div class="flex items-center space-x-2">
+                                <button onclick="openOrderModal('${order.id}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-lg flex items-center transition">
+                                    <i data-lucide="qr-code" class="w-3.5 h-3.5 mr-1"></i> QR & Détails
+                                </button>
+                                <button onclick="deleteOrder('${order.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            lucide.createIcons();
+        }
+
+        function updateOrderStatus(orderId, newStatus) {
+            const order = orders.find(o => o.id === orderId);
+            if (order) {
+                order.status = newStatus;
+                saveOrdersToStorage();
+                renderOrdersHistory();
+                showToast(`Commande ${orderId} passée en "${newStatus}"`, "info");
+            }
+        }
+
+        function deleteOrder(orderId) {
+            if (confirm(`Voulez-vous vraiment supprimer la commande ${orderId} ?`)) {
+                orders = orders.filter(o => o.id !== orderId);
+                saveOrdersToStorage();
+                renderOrdersHistory();
+                showToast("Commande supprimée", "info");
+            }
+        }
+
+        // --- MODAL & GENERATION DE QR CODE ---
+        function openOrderModal(orderId) {
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
+
+            document.getElementById('modal-order-id').textContent = order.id;
+            
+            const dateObj = new Date(order.createdAt);
+            document.getElementById('modal-order-date').textContent = dateObj.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+            const statusBadge = document.getElementById('modal-order-status');
+            statusBadge.textContent = order.status;
+            statusBadge.className = "inline-block px-3 py-1 rounded-full text-xs font-semibold ";
+            if (order.status === 'En attente') statusBadge.className += "bg-amber-50 text-amber-700 border border-amber-200";
+            if (order.status === 'Confirmée') statusBadge.className += "bg-blue-50 text-blue-700 border border-blue-200";
+            if (order.status === 'Livrée') statusBadge.className += "bg-emerald-50 text-emerald-700 border border-emerald-200";
+
+            document.getElementById('modal-client-info').textContent = `${order.clientName} (${order.table})`;
+            document.getElementById('modal-notes-info').textContent = order.notes ? `Note: "${order.notes}"` : 'Aucune instruction spécifique.';
+
+            const itemsList = document.getElementById('modal-items-list');
+            itemsList.innerHTML = order.items.map(i => `
+                <li class="flex justify-between">
+                    <span>${i.quantity}x ${escapeHtml(i.name)}</span>
+                    <span class="font-medium">${(i.price * i.quantity).toFixed(2)} €</span>
+                </li>
+            `).join('');
+
+            document.getElementById('modal-order-total').textContent = `${order.total.toFixed(2)} €`;
+
+            // Génération du QR Code
+            const qrContainer = document.getElementById('qrcode-canvas');
+            qrContainer.innerHTML = '';
+            
+            // On encode une version compressée JSON pour le QR Code
+            const qrPayload = JSON.stringify({
+                id: order.id,
+                client: order.clientName,
+                total: order.total
+            });
+
+            new QRCode(qrContainer, {
+                text: qrPayload,
+                width: 140,
+                height: 140,
+                colorDark : "#0f172a",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.M
+            });
+
+            document.getElementById('order-modal').classList.remove('hidden');
+        }
+
+        function closeOrderModal() {
+            document.getElementById('order-modal').classList.add('hidden');
+        }
+
+        // --- UTILITAIRES / TOASTS ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            let iconName = 'info';
+            let bgClass = 'bg-slate-900 text-white';
+
+            if (type === 'success') {
+                iconName = 'check-circle';
+                bgClass = 'bg-emerald-600 text-white';
+            } else if (type === 'error') {
+                iconName = 'alert-circle';
+                bgClass = 'bg-rose-600 text-white';
+            }
+
+            toast.className = `flex items-center space-x-2 px-4 py-3 rounded-xl shadow-lg font-medium text-sm transition-all duration-300 transform translate-y-2 opacity-0 ${bgClass} pointer-events-auto`;
+            toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i><span>${escapeHtml(message)}</span>`;
+
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            // Animation
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
